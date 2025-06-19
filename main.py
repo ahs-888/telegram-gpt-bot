@@ -1,39 +1,44 @@
 import telebot
 from telebot import types
-from openai import OpenAI
+import openai
 import os
 
+# === НАСТРОЙКИ ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
-client = OpenAI(api_key=OPENAI_API_KEY)
+openai.api_key = OPENAI_API_KEY
 
+# === Состояния ===
 user_state = {}
 user_free_uses = {}
 
 AGENTS = {
     "presentations": """
-Ты — экспертный AI-ассистент по созданию бизнес-презентаций.
+Ты — экспертный AI-ассистент по созданию структурированных бизнес-презентаций в консалтинговом стиле.
 
 🔍 Специализация:
-- Пирамида Минто, методы McKinsey, BCG
-- MECE, SWOT, 2x2, Roadmap
-- Структура, стиль, логика, визуал
+- Работаешь по принципу пирамиды Минто (сначала вывод — потом аргументы)
+- Используешь подходы McKinsey, BCG, Bain
+- Применяешь инструменты: MECE, SWOT, 2x2, Roadmap, Dashboards и др.
+- Подбираешь стиль и глубину под разную аудиторию: руководство, коллеги, клиенты, студенты
 
 🧠 Ты умеешь:
-- Структурировать идею
-- Делать план и слайды
-- Создавать убедительные презентации
+- Помогать структурировать сложную идею в презентацию
+- Создавать план, слайды и визуализацию
+- Делать презентации логичными, убедительными и профессиональными
 
-Перед началом спроси:
+Перед созданием задаёшь уточняющие вопросы:
 – Какова цель презентации?
 – Кто целевая аудитория?
-– Сколько слайдов?
-– Какие методы предпочитаются?
+– Какие главные идеи ты хочешь донести?
+– Какой желаемый объем (кол-во слайдов)?
+– Какие методологии или стили ты предпочитаешь (если есть)?
 """
 }
 
+# === КОМАНДА /START ===
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_free_uses[message.chat.id] = 3
@@ -48,17 +53,20 @@ def send_welcome(message):
     )
     bot.send_message(message.chat.id, "👋 Привет! Выбери категорию ассистента:", reply_markup=markup)
 
+# === ВЫБОР КНОПКИ ===
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
     user_state[call.message.chat.id] = call.data
     bot.send_message(call.message.chat.id, "🧠 Напиши, для чего тебе нужен промт:")
 
+# === ОБРАБОТКА ЗАПРОСА ===
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_id = message.chat.id
     if user_id not in user_state:
         return bot.send_message(user_id, "Сначала выбери категорию: /start")
 
+    # Лимит бесплатного использования
     if user_free_uses.get(user_id, 0) <= 0:
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🔓 Купить доступ", url="https://your-payment-link.com"))
@@ -66,24 +74,26 @@ def handle_message(message):
 
     prompt = message.text
     category = user_state[user_id]
+
     if category == "presentations":
         system_message = AGENTS["presentations"]
     else:
         system_message = f"Ты ассистент категории {category}. Создай полезный промт по теме: {prompt}"
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4",
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # ← заменено с gpt-4 на стабильную версию
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt}
             ]
         )
-        result = response.choices[0].message.content
+        result = response['choices'][0]['message']['content']
     except Exception as e:
-        return bot.send_message(user_id, f"Ошибка при обращении к OpenAI: {e}")
+        return bot.send_message(user_id, f"❌ Ошибка при обращении к OpenAI:\n{e}")
 
     user_free_uses[user_id] -= 1
     bot.send_message(user_id, f"🔹 Готово!\n\n{result}\n\n✅ Осталось бесплатных генераций: {user_free_uses[user_id]} из 3")
 
+# === ЗАПУСК ===
 bot.polling(none_stop=True)
