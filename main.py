@@ -1,6 +1,6 @@
 import telebot
 from telebot import types
-import openai
+from openai import OpenAI
 import os
 
 # === НАСТРОЙКИ ===
@@ -8,12 +8,11 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Словарь для хранения состояния пользователя
 user_state = {}
 user_free_uses = {}
-
 AGENTS = {
     "presentations": """
 Ты — экспертный AI-ассистент по созданию структурированных бизнес-презентаций в консалтинговом стиле.
@@ -74,29 +73,25 @@ def handle_message(message):
 
     prompt = message.text
     category = user_state[user_id]
-
     if category == "presentations":
         system_message = AGENTS["presentations"]
     else:
         system_message = f"Ты ассистент категории {category}. Создай полезный промт по теме: {prompt}"
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt}
             ]
         )
-        result = response['choices'][0]['message']['content']
+        result = response.choices[0].message.content
     except Exception as e:
         return bot.send_message(user_id, f"Ошибка при обращении к OpenAI: {e}")
 
     user_free_uses[user_id] -= 1
-    bot.send_message(
-        user_id,
-        f"🔹 Готово!\n\n{result}\n\n✅ Осталось бесплатных генераций: {user_free_uses[user_id]} из 3"
-    )
+    bot.send_message(user_id, f"🔹 Готово!\n\n{result}\n\n✅ Осталось бесплатных генераций: {user_free_uses[user_id]} из 3")
 
 # === ЗАПУСК ===
 bot.polling(none_stop=True)
