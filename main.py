@@ -42,7 +42,7 @@ def send_welcome(message):
     user_free_uses[message.chat.id] = 3  # даём 3 бесплатных генерации
     markup = types.InlineKeyboardMarkup()
     markup.add(
-        types.InlineKeyboardButton("📊 Презентации", callback_data="presentations")
+        types.InlineKeyboardButton("📊 Презентации", callback_data="presentations"),
         types.InlineKeyboardButton("Промт под любую сферу", callback_data="any"),
         types.InlineKeyboardButton("Telegram пост", callback_data="tg"),
         types.InlineKeyboardButton("Маркетинг", callback_data="mkt"),
